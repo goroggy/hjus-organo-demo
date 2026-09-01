@@ -314,6 +314,60 @@
     .event-focus .flow-ribbon.is-focused { opacity: .82; stroke-width: calc(var(--ribbon-width, 15) + 3px); }
     .event-focus .org-node:not(.is-focused) rect { opacity: .42; }
 
+    #flow-map[data-mode="tasks"] .org-node rect {
+      opacity: .18 !important;
+      filter: grayscale(.65) drop-shadow(0 3px 5px rgba(22, 53, 45, .08));
+    }
+
+    #flow-map[data-mode="tasks"] .org-node foreignObject { opacity: .22; }
+    #flow-map[data-mode="tasks"] .org-node.is-focused rect { opacity: .25 !important; }
+    #flow-map[data-mode="tasks"].event-focus .flow-ribbon { opacity: .08; }
+    #flow-map[data-mode="tasks"].event-focus .flow-ribbon.is-focused { opacity: .94; }
+
+    .task-label {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s ease;
+    }
+
+    #flow-map[data-mode="tasks"].event-focus .task-label.is-focused { opacity: .98; }
+
+    .task-label-shell {
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+
+    .task-label.is-focused .task-label-shell {
+      animation: task-label-arrive .64s var(--label-delay, 0s) cubic-bezier(.18,.8,.24,1) both;
+    }
+
+    .task-label rect {
+      fill: var(--teal);
+      stroke: rgba(255,255,255,.92);
+      stroke-width: 1.5;
+      filter: drop-shadow(0 4px 7px rgba(16, 44, 41, .28));
+    }
+
+    .task-label[data-task="pharma"] rect { fill: var(--orange); }
+    .task-label[data-task="nutrition"] rect { fill: var(--violet); }
+    .task-label[data-task="epidemiology"] rect { fill: var(--blue); }
+    .task-label[data-task="territorial"] rect { fill: #70765c; }
+    .task-label[data-task="primary"] rect { fill: #a15f7a; }
+
+    .task-label text {
+      fill: white;
+      font-size: 13px;
+      font-weight: 820;
+      letter-spacing: .01em;
+      text-anchor: middle;
+      dominant-baseline: middle;
+    }
+
+    @keyframes task-label-arrive {
+      from { opacity: 0; transform: translateX(-18px) scale(.92); }
+      to { opacity: 1; transform: translateX(0) scale(1); }
+    }
+
     .legend {
       display: none;
       flex-wrap: wrap;
@@ -382,6 +436,7 @@
 
     @media (prefers-reduced-motion: reduce) {
       .flow-pulse { animation: none !important; }
+      .task-label-shell { animation: none !important; }
     }
   </style>
 </head>
@@ -439,6 +494,7 @@
           <g id="ribbons"></g>
           <g id="pulses"></g>
           <g id="nodes"></g>
+          <g id="task-labels" aria-label="Az aktuális időlépés közfeladatai"></g>
         </svg>
       </div>
     </section>
@@ -493,8 +549,8 @@
       { from:"oth-2011", to:"oth-2015", event:"2015-03-01", fromOrg:"oth", toOrg:"oth", task:"public", weight:22, label:"központi népegészségügy" },
       { from:"oek-2011", to:"oek-2015", event:"2015-03-01", fromOrg:"oek", toOrg:"oek", task:"epidemiology", weight:14, label:"járványügy" },
       { from:"okk-2011", to:"okk-2015", event:"2015-03-01", fromOrg:"okk", toOrg:"okk", task:"public", weight:16, label:"közegészségügy és munkaegészségügy" },
-      { from:"ogyei-2015", to:"ogyei-2017", event:"2017-03-31", fromOrg:"ogyei", toOrg:"ogyei", task:"pharma", weight:24, label:"OGYÉI-folytonosság" },
-      { from:"oth-2015", to:"emmi-2017", event:"2017-03-31", fromOrg:"oth", toOrg:"emmi", task:"public", weight:15, label:"általános jogutódlás" },
+      { from:"ogyei-2015", to:"ogyei-2017", event:"2017-03-31", fromOrg:"ogyei", toOrg:"ogyei", task:"pharma", weight:24, label:"OGYÉI-folytonosság", taskLabel:"gyógyszerészeti feladatok" },
+      { from:"oth-2015", to:"emmi-2017", event:"2017-03-31", fromOrg:"oth", toOrg:"emmi", task:"public", weight:15, label:"általános jogutódlás", taskLabel:"központi irányítás" },
       { from:"oth-2015", to:"oki-2017", event:"2017-03-31", fromOrg:"oth", toOrg:"oki", task:"public", weight:10, label:"munkaegészségügyi és projektfeladatok" },
       { from:"oth-2015", to:"aeek-2017", event:"2017-03-31", fromOrg:"oth", toOrg:"aeek", task:"primary", weight:8, label:"praxisprogramok" },
       { from:"oth-2015", to:"bfkh-2017", event:"2017-03-31", fromOrg:"oth", toOrg:"bfkh", task:"territorial", weight:9, label:"fővárosi népegészségügyi hatóság" },
@@ -557,9 +613,44 @@
       });
     }
 
+    function taskLabelLayout() {
+      const layout = new Map();
+      const minimumGap = 42;
+      dates.slice(1).forEach(event => {
+        const eventLinks = links
+          .filter(link => link.event === event.date)
+          .map(link => {
+            const from = nodeById.get(link.from);
+            const to = nodeById.get(link.to);
+            return {
+              link,
+              naturalY:(from.y + to.y) / 2 + nodeHeight / 2
+            };
+          })
+          .sort((first, second) => first.naturalY - second.naturalY);
+
+        let previousY = 28 - minimumGap;
+        eventLinks.forEach(item => {
+          item.y = Math.max(item.naturalY, previousY + minimumGap);
+          previousY = item.y;
+        });
+
+        const overflow = Math.max(0, previousY - 800);
+        eventLinks.forEach(item => {
+          layout.set(item.link, {
+            x:dateXByDate.get(event.date) - 135,
+            y:item.y - overflow
+          });
+        });
+      });
+      return layout;
+    }
+
     function renderRibbons() {
       const ribbonLayer = document.getElementById("ribbons");
       const pulseLayer = document.getElementById("pulses");
+      const taskLabelLayer = document.getElementById("task-labels");
+      const labelLayout = taskLabelLayout();
       links.forEach((link, index) => {
         const path = ribbonPath(link);
         const ribbon = svgElement("path", {
@@ -576,6 +667,30 @@
         ribbon.appendChild(title);
         ribbonLayer.appendChild(ribbon);
         pulseLayer.appendChild(svgElement("path", { d:path, class:"flow-pulse", "data-event":link.event, style:`animation-delay:-${(index % 7) * .18}s` }));
+
+        const fullLabel = link.label;
+        const taskLabel = link.taskLabel || fullLabel;
+        const visibleLabel = taskLabel.length > 32 ? `${taskLabel.slice(0, 29)}…` : taskLabel;
+        const labelWidth = Math.min(258, Math.max(88, visibleLabel.length * 7.2 + 24));
+        const point = labelLayout.get(link);
+        const labelGroup = svgElement("g", {
+          class:"task-label",
+          transform:`translate(${point.x} ${point.y})`,
+          "data-event":link.event,
+          "data-task":link.task,
+          "aria-label":fullLabel,
+          style:`--label-delay:${(index % 8) * .055}s`
+        });
+        const labelTitle = svgElement("title");
+        labelTitle.textContent = fullLabel;
+        labelGroup.appendChild(labelTitle);
+        const labelShell = svgElement("g", { class:"task-label-shell" });
+        labelShell.appendChild(svgElement("rect", { x:-labelWidth / 2, y:-15, width:labelWidth, height:30, rx:15 }));
+        const labelText = svgElement("text", { x:0, y:1 });
+        labelText.textContent = visibleLabel;
+        labelShell.appendChild(labelText);
+        labelGroup.appendChild(labelShell);
+        taskLabelLayer.appendChild(labelGroup);
       });
     }
 
@@ -613,7 +728,7 @@
       const map = document.getElementById("flow-map");
       const selected = dates.find(item => item.date === date);
       const alreadySelected = map.dataset.focusDate === date;
-      document.querySelectorAll(".flow-ribbon, .flow-pulse, .org-node").forEach(item => item.classList.remove("is-focused"));
+      document.querySelectorAll(".flow-ribbon, .flow-pulse, .org-node, .task-label").forEach(item => item.classList.remove("is-focused"));
       document.querySelectorAll("#timeline button").forEach(button => button.setAttribute("aria-pressed", "false"));
 
       if (alreadySelected) {
@@ -631,7 +746,7 @@
       document.getElementById("now-line").setAttribute("x2", markerX);
       document.getElementById("now-label").setAttribute("x", markerX);
       document.querySelector(`#timeline button[data-date="${date}"]`).setAttribute("aria-pressed", "true");
-      document.querySelectorAll(`.flow-ribbon[data-event="${date}"], .flow-pulse[data-event="${date}"], .org-node[data-date="${date}"]`).forEach(item => item.classList.add("is-focused"));
+      document.querySelectorAll(`.flow-ribbon[data-event="${date}"], .flow-pulse[data-event="${date}"], .org-node[data-date="${date}"], .task-label[data-event="${date}"]`).forEach(item => item.classList.add("is-focused"));
       const relatedIds = links.filter(link => link.event === date).flatMap(link => [link.from, link.to]);
       relatedIds.forEach(id => {
         const node = document.querySelector(`.org-node[aria-label^="${CSS.escape(nodeById.get(id).name)}"]`);
