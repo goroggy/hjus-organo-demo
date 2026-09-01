@@ -324,6 +324,12 @@
     #flow-map[data-mode="tasks"].event-focus .flow-ribbon { opacity: .08; }
     #flow-map[data-mode="tasks"].event-focus .flow-ribbon.is-focused { opacity: .94; }
 
+    #flow-map[data-mode="tasks"][data-task-story="playing"].event-focus .flow-ribbon.is-focused { opacity: .16; }
+    #flow-map[data-mode="tasks"][data-task-story="playing"].event-focus .flow-ribbon.is-task-current {
+      opacity: 1;
+      stroke-width: calc(var(--ribbon-width, 15) + 5px);
+    }
+
     .task-label {
       opacity: 0;
       pointer-events: none;
@@ -331,6 +337,9 @@
     }
 
     #flow-map[data-mode="tasks"].event-focus .task-label.is-focused { opacity: .98; }
+    #flow-map[data-mode="tasks"][data-task-story="playing"].event-focus .task-label.is-focused { opacity: 0; }
+    #flow-map[data-mode="tasks"][data-task-story="playing"].event-focus .task-label.is-task-current { opacity: .98; }
+    #flow-map[data-mode="tasks"][data-task-story="summary"].event-focus .task-label.is-focused { opacity: 0; }
 
     .task-label-shell {
       transform-box: fill-box;
@@ -383,8 +392,9 @@
     .legend i { width: 20px; height: 5px; border-radius: 5px; background: var(--swatch); }
 
     .event-card {
+      position: relative;
       display: grid;
-      grid-template-columns: minmax(190px, auto) 1fr;
+      grid-template-columns: minmax(190px, auto) 1fr auto;
       gap: 12px;
       align-items: baseline;
       min-height: 0;
@@ -409,6 +419,79 @@
       font-weight: 680;
       line-height: 1.35;
     }
+
+    .task-story-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 235px;
+      padding: 5px 10px;
+      border: 1px solid rgba(177, 18, 59, .22);
+      border-radius: 999px;
+      color: #7f1d32;
+      background: rgba(255,255,255,.72);
+      font-size: .72rem;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .task-story-status[hidden] { display: none; }
+    #task-story-count { color: #b1123b; font-weight: 900; }
+    #task-story-label {
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .task-summary { position: relative; }
+    .task-summary[hidden] { display: none; }
+
+    .task-summary-toggle {
+      padding: 6px 11px;
+      border: 1px solid rgba(177, 18, 59, .28);
+      border-radius: 999px;
+      color: #7f1d32;
+      background: white;
+      cursor: pointer;
+      font-size: .72rem;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .task-summary-toggle::after { margin-left: 7px; content: "⌄"; }
+    .task-summary-toggle[aria-expanded="true"]::after { content: "⌃"; }
+    .task-summary-toggle:disabled { cursor: default; opacity: .72; }
+
+    .task-summary-panel {
+      position: absolute;
+      z-index: 20;
+      top: calc(100% + 9px);
+      right: 0;
+      width: min(720px, calc(100vw - 70px));
+      max-height: 360px;
+      padding: 10px;
+      overflow: auto;
+      border: 1px solid #d9b3bd;
+      border-radius: 14px;
+      background: rgba(255,255,255,.98);
+      box-shadow: 0 18px 45px rgba(61, 24, 34, .22);
+    }
+
+    .task-summary-panel[hidden] { display: none; }
+
+    .task-summary-item {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) minmax(230px, 1.25fr);
+      gap: 3px 14px;
+      padding: 8px 9px;
+      border-bottom: 1px solid #f0dce1;
+    }
+
+    .task-summary-item:last-child { border-bottom: 0; }
+    .task-summary-item strong { font-family: inherit; font-size: .76rem; }
+    .task-summary-route { color: var(--ink); font-size: .73rem; font-weight: 720; }
+    .task-summary-evidence { grid-column: 1 / -1; color: var(--muted); font-size: .68rem; }
+    .task-summary-evidence a { color: #8f1736; font-weight: 780; }
 
     .event-card.is-entering strong {
       animation: caption-in .48s cubic-bezier(.2,.8,.25,1) both;
@@ -463,6 +546,14 @@
           <aside class="event-card" aria-live="polite">
             <strong id="event-heading">A teljes történet</strong>
             <p id="event-description">Egyetlen képen látszik a 2017-es szétágazás, az OKI kialakulása és a 2023-as NNGYK-egyesülés.</p>
+            <div id="task-story-status" class="task-story-status" hidden>
+              <span id="task-story-count"></span>
+              <span id="task-story-label"></span>
+            </div>
+            <div id="task-summary" class="task-summary" hidden>
+              <button id="task-summary-toggle" class="task-summary-toggle" type="button" aria-expanded="false" aria-controls="task-summary-panel"></button>
+              <div id="task-summary-panel" class="task-summary-panel" role="region" aria-label="Az esemény feladatútjai" hidden></div>
+            </div>
           </aside>
           <div class="legend" aria-label="Közfeladatok színmagyarázata">
             <span style="--swatch:var(--teal)"><i></i>népegészségügyi irányítás</span>
@@ -502,13 +593,13 @@
 
   <script>
     const dates = [
-      { date: "2004-05-01", year: "2004", title: "Európai uniós kiinduló állapot", description: "Az OGYI, az OÉTI, az OTH, az OEK és az OKK külön szervezeti ágként jelenik meg." },
-      { date: "2011-05-01", year: "2011", title: "Az OGYI beolvad a GYEMSZI-be", description: "A gyógyszerészeti hatósági feladatok a GYEMSZI szervezetében folytatódnak." },
-      { date: "2015-03-01", year: "2015", title: "Létrejön az OGYÉI", description: "Az OÉTI folytonossága és a GYEMSZI gyógyszerészeti, orvostechnikai és technológiaértékelési egységei egyesülnek." },
-      { date: "2017-03-31", year: "2017", title: "Az OTH ötfelé ágazik", description: "Az irányítási, munkaegészségügyi, praxisprogram-, fővárosi és megyei feladatok külön utakra kerülnek; közben az OEK és az OKK az OKI-ban fut össze." },
-      { date: "2018-10-01", year: "2018", title: "Létrejön az NNK", description: "Az OKI névváltása és az EMMI tisztifőorvosi egységeinek visszaáramlása újra közös központot alkot." },
-      { date: "2023-08-01", year: "2023", title: "Az NNK és az OGYÉI egyesül", description: "A népegészségügyi és gyógyszerészeti ág az NNGYK-ban találkozik." },
-      { date: "2026-09-01", year: "2026", title: "Jelenlegi kontrollpont", description: "A rendelkezésre álló források alapján az NNGYK továbbra is egységes szervezet; a szöveges forrásütközés nem rajzol új ágat." }
+      { date: "2004-05-01", year: "2004", title: "Európai uniós kiinduló állapot", description: "Az OGYI, az OÉTI, az OTH, az OEK és az OKK külön szervezeti ágként jelenik meg.", source:"26/2004. (IV. 21.) ESzCsM rendelet", sourceUrl:"https://njt.hu/jogszabaly/2004-26-20-0M" },
+      { date: "2011-05-01", year: "2011", title: "Az OGYI beolvad a GYEMSZI-be", description: "A gyógyszerészeti hatósági feladatok a GYEMSZI szervezetében folytatódnak.", source:"59/2011. (IV. 12.) Korm. rendelet", sourceUrl:"https://njt.hu/jogszabaly/2011-59-20-22" },
+      { date: "2015-03-01", year: "2015", title: "Létrejön az OGYÉI", description: "Az OÉTI folytonossága és a GYEMSZI gyógyszerészeti, orvostechnikai és technológiaértékelési egységei egyesülnek.", source:"17/2015. (V. 11.) EMMI utasítás I./1.3–1.4.", sourceUrl:"https://njt.jog.gov.hu/jogszabaly/2015-17-B0-5H" },
+      { date: "2017-03-31", year: "2017", title: "Az OTH ötfelé ágazik", description: "Az irányítási, munkaegészségügyi, praxisprogram-, fővárosi és megyei feladatok külön utakra kerülnek; közben az OEK és az OKK az OKI-ban fut össze.", source:"378/2016. (XII. 2.) Korm. rendelet 19. §", sourceUrl:"https://njt.hu/jogszabaly/2016-378-20-22.13" },
+      { date: "2018-10-01", year: "2018", title: "Létrejön az NNK", description: "Az OKI névváltása és az EMMI tisztifőorvosi egységeinek visszaáramlása újra közös központot alkot.", source:"162/2018. (IX. 10.) Korm. rendelet 35–36. §", sourceUrl:"https://njt.hu/jogszabaly/2018-162-20-22" },
+      { date: "2023-08-01", year: "2023", title: "Az NNK és az OGYÉI egyesül", description: "A népegészségügyi és gyógyszerészeti ág az NNGYK-ban találkozik.", source:"333/2023. (VII. 20.) Korm. rendelet 18–19. §", sourceUrl:"https://njt.hu/jogszabaly/2023-333-20-22" },
+      { date: "2026-09-01", year: "2026", title: "Jelenlegi kontrollpont", description: "A rendelkezésre álló források alapján az NNGYK továbbra is egységes szervezet; a szöveges forrásütközés nem rajzol új ágat.", source:"4/2026. (VII. 27.) EÜM utasítás", sourceUrl:"https://njt.jog.gov.hu/jogszabaly/2026-4-B0-0B" }
     ];
 
     const nodes = [
@@ -572,8 +663,11 @@
     const dateXs = [140, 410, 680, 950, 1220, 1490, 1760];
     const dateXByDate = new Map(dates.map((item, index) => [item.date, dateXs[index]]));
     const storyDwellMs = 4600;
+    const taskStepMs = 780;
     let storyIndex = 0;
     let storyTimer = null;
+    let taskStepTimer = null;
+    let taskStepIndex = -1;
 
     function svgElement(name, attributes = {}) {
       const element = document.createElementNS(svgNS, name);
@@ -660,13 +754,14 @@
           "data-from":link.fromOrg,
           "data-to":link.toOrg,
           "data-task":link.task,
+          "data-link-index":index,
           style:`--ribbon-width:${link.weight}px`
         });
         const title = svgElement("title");
         title.textContent = link.label;
         ribbon.appendChild(title);
         ribbonLayer.appendChild(ribbon);
-        pulseLayer.appendChild(svgElement("path", { d:path, class:"flow-pulse", "data-event":link.event, style:`animation-delay:-${(index % 7) * .18}s` }));
+        pulseLayer.appendChild(svgElement("path", { d:path, class:"flow-pulse", "data-event":link.event, "data-link-index":index, style:`animation-delay:-${(index % 7) * .18}s` }));
 
         const fullLabel = link.label;
         const taskLabel = link.taskLabel || fullLabel;
@@ -678,6 +773,7 @@
           transform:`translate(${point.x} ${point.y})`,
           "data-event":link.event,
           "data-task":link.task,
+          "data-link-index":index,
           "aria-label":fullLabel,
           style:`--label-delay:${(index % 8) * .055}s`
         });
@@ -728,7 +824,8 @@
       const map = document.getElementById("flow-map");
       const selected = dates.find(item => item.date === date);
       const alreadySelected = map.dataset.focusDate === date;
-      document.querySelectorAll(".flow-ribbon, .flow-pulse, .org-node, .task-label").forEach(item => item.classList.remove("is-focused"));
+      clearTimeout(taskStepTimer);
+      document.querySelectorAll(".flow-ribbon, .flow-pulse, .org-node, .task-label").forEach(item => item.classList.remove("is-focused", "is-task-current"));
       document.querySelectorAll("#timeline button").forEach(button => button.setAttribute("aria-pressed", "false"));
 
       if (alreadySelected) {
@@ -759,6 +856,122 @@
       eventCard.classList.remove("is-entering");
       void eventCard.offsetWidth;
       eventCard.classList.add("is-entering");
+      if (map.dataset.mode === "tasks" && map.dataset.motion === "true") {
+        startTaskStory(date);
+      } else if (map.dataset.mode === "tasks") {
+        showTaskSummary(date, true);
+      } else {
+        hideTaskSummary();
+      }
+    }
+
+    function taskLinksFor(date) {
+      return links.filter(link => link.event === date && link.fromOrg !== link.toOrg);
+    }
+
+    function showTaskStoryStep(date, index) {
+      const eventLinks = taskLinksFor(date);
+      const status = document.getElementById("task-story-status");
+      document.querySelectorAll(".flow-ribbon, .flow-pulse, .task-label").forEach(item => item.classList.remove("is-task-current"));
+      if (!eventLinks.length || index < 0 || index >= eventLinks.length) {
+        status.hidden = true;
+        return;
+      }
+      const link = eventLinks[index];
+      const linkIndex = links.indexOf(link);
+      document.querySelectorAll(`[data-link-index="${linkIndex}"]`).forEach(item => item.classList.add("is-task-current"));
+      document.getElementById("task-story-count").textContent = `${index + 1} / ${eventLinks.length}`;
+      document.getElementById("task-story-label").textContent = link.taskLabel || link.label;
+      status.hidden = false;
+    }
+
+    function hideTaskSummary() {
+      const summary = document.getElementById("task-summary");
+      const button = document.getElementById("task-summary-toggle");
+      const panel = document.getElementById("task-summary-panel");
+      summary.hidden = true;
+      button.setAttribute("aria-expanded", "false");
+      panel.hidden = true;
+    }
+
+    function showTaskSummary(date, enabled) {
+      const eventLinks = taskLinksFor(date);
+      const event = dates.find(item => item.date === date);
+      const summary = document.getElementById("task-summary");
+      const button = document.getElementById("task-summary-toggle");
+      const panel = document.getElementById("task-summary-panel");
+      document.getElementById("task-story-status").hidden = true;
+      if (!event || !eventLinks.length) {
+        hideTaskSummary();
+        return;
+      }
+      document.getElementById("flow-map").dataset.taskStory = "summary";
+      document.querySelectorAll(".flow-ribbon, .flow-pulse, .task-label").forEach(item => item.classList.remove("is-task-current"));
+      const targetCount = new Set(eventLinks.map(link => link.to)).size;
+      button.textContent = `${eventLinks.length} feladat került át ${targetCount} szervezethez`;
+      button.disabled = !enabled;
+      button.setAttribute("aria-expanded", "false");
+      panel.hidden = true;
+      panel.replaceChildren();
+      const formattedDate = new Intl.DateTimeFormat("hu-HU", { dateStyle:"long" }).format(new Date(`${date}T12:00:00`));
+      eventLinks.forEach(link => {
+        const item = document.createElement("article");
+        item.className = "task-summary-item";
+        const title = document.createElement("strong");
+        title.textContent = link.taskLabel || link.label;
+        const route = document.createElement("span");
+        route.className = "task-summary-route";
+        route.textContent = `${nodeById.get(link.from).name} → ${nodeById.get(link.to).name}`;
+        const evidence = document.createElement("span");
+        evidence.className = "task-summary-evidence";
+        evidence.append(`${formattedDate} · `);
+        const source = document.createElement("a");
+        source.href = event.sourceUrl;
+        source.target = "_blank";
+        source.rel = "noreferrer";
+        source.textContent = event.source;
+        evidence.appendChild(source);
+        item.append(title, route, evidence);
+        panel.appendChild(item);
+      });
+      summary.hidden = false;
+    }
+
+    function toggleTaskSummary() {
+      const button = document.getElementById("task-summary-toggle");
+      if (button.disabled) return;
+      const panel = document.getElementById("task-summary-panel");
+      const expanded = button.getAttribute("aria-expanded") !== "true";
+      button.setAttribute("aria-expanded", String(expanded));
+      panel.hidden = !expanded;
+    }
+
+    function startTaskStory(date) {
+      clearTimeout(taskStepTimer);
+      const map = document.getElementById("flow-map");
+      const eventLinks = taskLinksFor(date);
+      if (map.dataset.mode !== "tasks" || !eventLinks.length) {
+        delete map.dataset.taskStory;
+        document.getElementById("task-story-status").hidden = true;
+        hideTaskSummary();
+        return;
+      }
+      hideTaskSummary();
+      map.dataset.taskStory = "playing";
+      taskStepIndex = 0;
+      showTaskStoryStep(date, taskStepIndex);
+      const advance = () => {
+        if (map.dataset.motion !== "true" || map.dataset.focusDate !== date) return;
+        taskStepIndex += 1;
+        if (taskStepIndex >= eventLinks.length) {
+          delete map.dataset.taskStory;
+          showTaskSummary(date, false);
+          return;
+        }
+        showTaskStoryStep(date, taskStepIndex);
+        taskStepTimer = setTimeout(advance, taskStepMs);
+      };
+      taskStepTimer = setTimeout(advance, taskStepMs);
     }
 
     function setMode(mode) {
@@ -769,6 +982,16 @@
       document.getElementById("mode-summary").innerHTML = taskMode
         ? "<strong>Közfeladat-áramlás.</strong> Milyen feladatcsomag halad az utakon."
         : "<strong>Szervezeti folytonosság.</strong> Melyik intézményből mi lett.";
+      if (taskMode && document.getElementById("flow-map").dataset.motion === "true") {
+        startTaskStory(document.getElementById("flow-map").dataset.focusDate);
+      } else if (taskMode) {
+        showTaskSummary(document.getElementById("flow-map").dataset.focusDate, true);
+      } else if (!taskMode) {
+        clearTimeout(taskStepTimer);
+        delete document.getElementById("flow-map").dataset.taskStory;
+        document.getElementById("task-story-status").hidden = true;
+        hideTaskSummary();
+      }
     }
 
     function toggleMotion() {
@@ -779,9 +1002,13 @@
       button.setAttribute("aria-pressed", String(isRunning));
       button.textContent = isRunning ? "Ⅱ Szünet" : "▶ Folytatás";
       if (isRunning) {
+        startTaskStory(map.dataset.focusDate);
         scheduleNextEvent();
       } else {
         clearTimeout(storyTimer);
+        clearTimeout(taskStepTimer);
+        delete map.dataset.taskStory;
+        showTaskSummary(map.dataset.focusDate, true);
       }
     }
 
@@ -789,9 +1016,12 @@
       const map = document.getElementById("flow-map");
       const button = document.getElementById("motion-toggle");
       clearTimeout(storyTimer);
+      clearTimeout(taskStepTimer);
       map.dataset.motion = "false";
       button.setAttribute("aria-pressed", "false");
       button.textContent = "▶ Folytatás";
+      delete map.dataset.taskStory;
+      if (map.dataset.mode === "tasks") showTaskSummary(map.dataset.focusDate, true);
     }
 
     function selectDateManually(date) {
@@ -808,11 +1038,15 @@
 
     function scheduleNextEvent() {
       clearTimeout(storyTimer);
+      const activeTaskCount = document.getElementById("flow-map").dataset.mode === "tasks"
+        ? taskLinksFor(dates[storyIndex].date).length
+        : 0;
+      const dwell = Math.max(storyDwellMs, activeTaskCount * taskStepMs + 1300);
       storyTimer = setTimeout(() => {
         storyIndex = (storyIndex + 1) % dates.length;
         focusDate(dates[storyIndex].date);
         scheduleNextEvent();
-      }, storyDwellMs);
+      }, dwell);
     }
 
     function startAutoplay() {
@@ -835,6 +1069,7 @@
     document.getElementById("motion-toggle").addEventListener("click", toggleMotion);
     document.getElementById("previous-event").addEventListener("click", () => stepStory(-1));
     document.getElementById("next-event").addEventListener("click", () => stepStory(1));
+    document.getElementById("task-summary-toggle").addEventListener("click", toggleTaskSummary);
   </script>
 </body>
 </html>
