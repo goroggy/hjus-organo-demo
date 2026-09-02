@@ -714,6 +714,32 @@
       return element;
     }
 
+    function wrapTaskLabel(textElement, value, maxLineWidth) {
+      const lines = [];
+      let currentLine = "";
+      value.trim().split(/\s+/).forEach(word => {
+        const candidate = currentLine ? `${currentLine} ${word}` : word;
+        textElement.textContent = candidate;
+        if (currentLine && textElement.getComputedTextLength() > maxLineWidth) {
+          lines.push(currentLine);
+          currentLine = word;
+        } else {
+          currentLine = candidate;
+        }
+      });
+      if (currentLine) lines.push(currentLine);
+
+      textElement.replaceChildren();
+      const lineHeight = 18;
+      const firstLineY = 1 - ((lines.length - 1) * lineHeight) / 2;
+      lines.forEach((line, index) => {
+        const tspan = svgElement("tspan", { x:0, y:firstLineY + index * lineHeight });
+        tspan.textContent = index < lines.length - 1 ? `${line} ` : line;
+        textElement.appendChild(tspan);
+      });
+      return lines;
+    }
+
     function ribbonPath(link) {
       const from = nodeById.get(link.from);
       const to = nodeById.get(link.to);
@@ -779,6 +805,39 @@
       return layout;
     }
 
+    function separateTaskLabels() {
+      const spacing = 6;
+      dates.slice(1).forEach(event => {
+        const eventLabels = [...document.querySelectorAll(`.task-label[data-event="${event.date}"]`)]
+          .map(label => {
+            const matrix = label.transform.baseVal.consolidate().matrix;
+            const rect = label.querySelector("rect");
+            return {
+              label,
+              x:matrix.e,
+              y:matrix.f,
+              rectY:Number(rect.getAttribute("y")),
+              height:Number(rect.getAttribute("height"))
+            };
+          })
+          .sort((first, second) => first.y - second.y);
+
+        let previousBottom = -Infinity;
+        eventLabels.forEach(item => {
+          const top = item.y + item.rectY;
+          if (top < previousBottom + spacing) {
+            item.y += previousBottom + spacing - top;
+          }
+          previousBottom = item.y + item.rectY + item.height;
+        });
+
+        const overflow = Math.max(0, previousBottom - 800);
+        eventLabels.forEach(item => {
+          item.label.setAttribute("transform", `translate(${item.x} ${item.y - overflow})`);
+        });
+      });
+    }
+
     function renderRibbons() {
       const ribbonLayer = document.getElementById("ribbons");
       const pulseLayer = document.getElementById("pulses");
@@ -825,13 +884,16 @@
         labelShell.appendChild(labelText);
         labelGroup.appendChild(labelShell);
         taskLabelLayer.appendChild(labelGroup);
-        while (labelText.getComputedTextLength() > 226 && labelText.textContent.length > 2) {
-          labelText.textContent = `${labelText.textContent.slice(0, -2).trimEnd()}…`;
-        }
-        const labelWidth = Math.min(258, Math.max(88, Math.ceil(labelText.getComputedTextLength() + 32)));
+        const labelLines = wrapTaskLabel(labelText, taskLabel, 226);
+        const longestLine = Math.max(...[...labelText.querySelectorAll("tspan")].map(line => line.getComputedTextLength()));
+        const labelWidth = Math.min(258, Math.max(88, Math.ceil(longestLine + 32)));
+        const labelHeight = 30 + (labelLines.length - 1) * 18;
         labelRect.setAttribute("x", -labelWidth / 2);
         labelRect.setAttribute("width", labelWidth);
+        labelRect.setAttribute("y", -labelHeight / 2);
+        labelRect.setAttribute("height", labelHeight);
       });
+      separateTaskLabels();
     }
 
     function renderNodes() {
