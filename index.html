@@ -804,8 +804,6 @@
 
         const fullLabel = link.label;
         const taskLabel = link.taskLabel || fullLabel;
-        const visibleLabel = taskLabel.length > 32 ? `${taskLabel.slice(0, 29)}…` : taskLabel;
-        const labelWidth = Math.min(258, Math.max(88, visibleLabel.length * 7.2 + 24));
         const point = labelLayout.get(link);
         const labelGroup = svgElement("g", {
           class:"task-label",
@@ -820,12 +818,19 @@
         labelTitle.textContent = fullLabel;
         labelGroup.appendChild(labelTitle);
         const labelShell = svgElement("g", { class:"task-label-shell" });
-        labelShell.appendChild(svgElement("rect", { x:-labelWidth / 2, y:-15, width:labelWidth, height:30, rx:15 }));
+        const labelRect = svgElement("rect", { x:-44, y:-15, width:88, height:30, rx:15 });
+        labelShell.appendChild(labelRect);
         const labelText = svgElement("text", { x:0, y:1 });
-        labelText.textContent = visibleLabel;
+        labelText.textContent = taskLabel;
         labelShell.appendChild(labelText);
         labelGroup.appendChild(labelShell);
         taskLabelLayer.appendChild(labelGroup);
+        while (labelText.getComputedTextLength() > 226 && labelText.textContent.length > 2) {
+          labelText.textContent = `${labelText.textContent.slice(0, -2).trimEnd()}…`;
+        }
+        const labelWidth = Math.min(258, Math.max(88, Math.ceil(labelText.getComputedTextLength() + 32)));
+        labelRect.setAttribute("x", -labelWidth / 2);
+        labelRect.setAttribute("width", labelWidth);
       });
     }
 
