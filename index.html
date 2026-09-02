@@ -146,6 +146,27 @@
       gap: 5px;
     }
 
+    .speed-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-right: 3px;
+      color: var(--muted);
+      font-size: .7rem;
+      font-weight: 760;
+    }
+
+    .speed-control select {
+      padding: 7px 24px 7px 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--ink);
+      background: white;
+      cursor: pointer;
+      font-size: .78rem;
+      font-weight: 760;
+    }
+
     .step-button {
       width: 34px;
       height: 34px;
@@ -365,7 +386,7 @@
 
     .task-label text {
       fill: white;
-      font-size: 13px;
+      font-size: 16px;
       font-weight: 820;
       letter-spacing: .01em;
       text-anchor: middle;
@@ -424,23 +445,32 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      min-width: 235px;
-      padding: 5px 10px;
+      min-width: 320px;
+      max-width: 390px;
+      min-height: 38px;
+      padding: 6px 12px;
       border: 1px solid rgba(177, 18, 59, .22);
-      border-radius: 999px;
+      border-radius: 18px;
       color: #7f1d32;
       background: rgba(255,255,255,.72);
-      font-size: .72rem;
-      font-weight: 760;
-      white-space: nowrap;
+      font-size: .94rem;
+      font-weight: 800;
+      line-height: 1.18;
     }
 
     .task-story-status[hidden] { display: none; }
-    #task-story-count { color: #b1123b; font-weight: 900; }
+    #task-story-count {
+      flex: none;
+      color: #b1123b;
+      font-size: .78rem;
+      font-weight: 900;
+      white-space: nowrap;
+    }
     #task-story-label {
-      max-width: 260px;
+      display: -webkit-box;
       overflow: hidden;
-      text-overflow: ellipsis;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
     }
 
     .task-summary { position: relative; }
@@ -565,6 +595,14 @@
           </div>
         </div>
         <div class="playback-controls" aria-label="Történet lejátszása">
+          <label class="speed-control" for="task-speed">
+            <span>Tempó</span>
+            <select id="task-speed" aria-label="Feladatok tempója">
+              <option value="calm" selected>Nyugodt</option>
+              <option value="normal">Normál</option>
+              <option value="fast">Gyors</option>
+            </select>
+          </label>
           <button id="previous-event" class="step-button" type="button" aria-label="Előző esemény">←</button>
           <button id="motion-toggle" class="motion-toggle" type="button" aria-pressed="false">▶ Áramlás</button>
           <button id="next-event" class="step-button" type="button" aria-label="Következő esemény">→</button>
@@ -663,7 +701,8 @@
     const dateXs = [140, 410, 680, 950, 1220, 1490, 1760];
     const dateXByDate = new Map(dates.map((item, index) => [item.date, dateXs[index]]));
     const storyDwellMs = 4600;
-    const taskStepMs = 780;
+    const taskStepDurations = { calm:3600, normal:2200, fast:1100 };
+    let taskStepMs = taskStepDurations.calm;
     let storyIndex = 0;
     let storyTimer = null;
     let taskStepTimer = null;
@@ -1049,6 +1088,15 @@
       }, dwell);
     }
 
+    function setTaskSpeed(speed) {
+      taskStepMs = taskStepDurations[speed] || taskStepDurations.calm;
+      const map = document.getElementById("flow-map");
+      if (map.dataset.mode === "tasks" && map.dataset.motion === "true") {
+        startTaskStory(map.dataset.focusDate);
+        scheduleNextEvent();
+      }
+    }
+
     function startAutoplay() {
       const map = document.getElementById("flow-map");
       const button = document.getElementById("motion-toggle");
@@ -1066,6 +1114,7 @@
     startAutoplay();
     document.getElementById("organisation-mode").addEventListener("click", () => setMode("organisations"));
     document.getElementById("task-mode").addEventListener("click", () => setMode("tasks"));
+    document.getElementById("task-speed").addEventListener("change", event => setTaskSpeed(event.target.value));
     document.getElementById("motion-toggle").addEventListener("click", toggleMotion);
     document.getElementById("previous-event").addEventListener("click", () => stepStory(-1));
     document.getElementById("next-event").addEventListener("click", () => stepStory(1));
